@@ -23,7 +23,7 @@ class setTime(processor.processor):
                 try:
                     reResults = [x.groupdict() for x in re.finditer(self.regexExtract,event[self.field])][0]
                     if self.inputFormat == "epoch":
-                        eventTime = datetime.datetime.fromtimestamp(int(reResults[self.regexExtractGroup]))
+                        eventTime = datetime.datetime.fromtimestamp(float(reResults[self.regexExtractGroup]))
                     else:
                         eventTime = datetime.datetime.strptime(reResults[self.regexExtractGroup],self.inputFormat)
                 except Exception as e:
@@ -32,7 +32,7 @@ class setTime(processor.processor):
             elif self.field and self.inputFormat:
                 try:
                     if self.inputFormat == "epoch":
-                        eventTime = datetime.datetime.fromtimestamp(int(event[self.field]))
+                        eventTime = datetime.datetime.fromtimestamp(float(event[self.field]))
                     elif self.inputFormat == "iso":
                         eventTime = datetime.datetime.fromisoformat(event[self.field])
                     else:
