@@ -65,27 +65,67 @@ def kill(cache: str):
             return True
     return False
 
-def process():
-    try:
-        while remainingCapacity(False) > 0 and len(taskPool.waiting) > 0:
-            cache = taskPool.waiting.pop()
-            process = Process(cache)
-            taskPool.running.append(process)
-            globalLogger.logger.log(7,"Worker Started",{ "cache" : cache, "pid" : process.pid },extra={ "source" : "queue", "type" : "start" })
-    except IndexError:
-        pass
+def process(self):
+    startTime = time.perf_counter()
+    cacheFile = os.path.join(globalSettings.args.cache_dir, globalSettings.args.cache)
+    processingMarker = f"{cacheFile}.processing"
 
-    for process in taskPool.running:
-        running = True if process.process.poll() == None else False
-        for line in iter(process.process.stdout.readline, b''):
-            sys.stdout.write(line.decode("utf-8"))
-        if running and time.time() - process.startTime > ( process.startTime + globalSettings.args.flush_timeout ):
-            process.process.terminate()
-            globalLogger.logger.log(10,"Worker Killed",{ "cache" : process.cache, "pid" : process.process.pid },extra={ "source" : "queue", "type" : "killed" })
-        if not running:
-            for line in iter(process.process.stdout.readline, b''):
-                sys.stdout.write(line.decode("utf-8"))
-            sys.stdout.flush()
-            globalLogger.logger.log(7,"Worker Ended",{ "cache" : process.cache, "pid" : process.process.pid },extra={ "source" : "queue", "type" : "end" })
-            taskPool.running.remove(process)
-            break
+    # Check if the cache file exists
+    if not os.path.exists(cacheFile): 
+        self.logger.log(50, f"Cache file does not exist", {
+            "name": self.name, 
+            "id": self.id, 
+            "cache": globalSettings.args.cache
+        }, extra={"source": "cache", "type": "exception"})
+        return
+
+    # Check for an existing processing marker
+    if os.path.exists(processingMarker):
+        self.logger.log(40, f"Processing marker found, skipping cache file", {
+            "name": self.name, 
+            "id": self.id, 
+            "cache": globalSettings.args.cache
+        }, extra={"source": "cache", "type": "warning"})
+        return
+
+    # Create the processing marker
+    open(processingMarker, 'w').close()
+
+    try:
+        cacheSize = os.path.getsize(cacheFile)
+        with open(cacheFile) as f:
+            for event in f:
+                eventStartTime = time.perf_counter_ns()
+                try:
+                    for next in self.next if self.next else []:
+                        next.processHandler(event.strip(), stack=[self.id])
+                except Exception as e:
+                    if self.nextError and self.nextError in objectCache.objectCache:
+                        globalLogger.logger.log(6, f"Event Exception Running Next Error", {
+                            "name": self.name, 
+                            "id": self.id
+                        }, extra={"source": "input", "type": "next_error"}, exc_info=True)
+                        objectCache.objectCache[self.nextError].processHandler(event.strip(), stack=[self.id])
+                    else:
+                        raise
+                self.updateProcessStats(eventStartTime)
+        for item in postRegister.items:
+            item()
+        os.remove(cacheFile)
+        self.logger.log(7, f"Cache file processed", {
+            "name": self.name, 
+            "id": self.id, 
+            "cache": globalSettings.args.cache, 
+            "took": time.perf_counter() - startTime, 
+            "size": cacheSize
+        }, extra={"source": "cache", "type": "stats"})
+    except Exception as e:
+        self.logger.log(40, f"Error processing cache file", {
+            "name": self.name, 
+            "id": self.id, 
+            "cache": globalSettings.args.cache
+        }, extra={"source": "cache", "type": "exception"}, exc_info=True)
+    finally:
+        # Remove the processing marker
+        if os.path.exists(processingMarker):
+            os.remove(processingMarker)
