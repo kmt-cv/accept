@@ -8,6 +8,8 @@ mainParser.add_argument('--log_level', type=int, default=6, help='--log_level 6'
 mainParser.add_argument('--debug', type=bool, default=False, help='Flag to enable debug', nargs="?", const=True)
 mainParser.add_argument('--cache_dir', type=str, default="cache", help='--cache_dir <path_to_cache_dir>')
 mainParser.add_argument('--version', type=str, default=False, help='Show version information', nargs="?", const="1.3-pr")
+mainParser.add_argument('--max_retries',type=str, default=10, help='Max retries if pipeline fails')
+mainParser.add_argument('--base_delay',type=str, default=10, help='Base delay for pipeline failure retry')
 subParsers = mainParser.add_subparsers(help='commands')
 
 acceptParser = subParsers.add_parser('accept', parents=[mainParser])

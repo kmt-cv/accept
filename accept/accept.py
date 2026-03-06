@@ -6,14 +6,15 @@ from core import globalLogger, globalSettings
 import accept.queue as queue
 
 def start(pipelines):
-    retryBuffer(True)
+    retryBuffer(False)
     startTime = time.time()
     for pipeline in pipelines:
         globalLogger.logger.log(7,"starting input",{ "id" : pipeline.id, "name" : pipeline.name},extra={ "source" : "pipeline", "type" : "start" })
         threading.Thread(target=pipeline.start, args=()).start()
     lastRetryCheck = startTime
+    queue.process()
     while len([ x for x in pipelines if x.running ]) > 0 or time.time() - startTime < 10:
-        if lastRetryCheck + 60 < time.time():
+        if lastRetryCheck + 600000 < time.time():
             retryBuffer()
             lastRetryCheck = time.time()
         queue.process()

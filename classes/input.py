@@ -66,27 +66,42 @@ class input(base.base):
     def process(self):
         startTime = time.perf_counter()
         cacheFile = os.path.join(globalSettings.args.cache_dir, globalSettings.args.cache)
+        processingMarker = f"{cacheFile}.processing"
         if not os.path.exists(cacheFile): 
             self.logger.log(50,f"Cache file does not exist",{ "name" : self.name, "id" : self.id, "cache" : globalSettings.args.cache },extra={ "source" : "cache", "type" : "exception" })
             return
+        position = 0
+        if os.path.exists(processingMarker):
+            self.logger.log(40, f"Processing marker found", {"name": self.name, "id": self.id, "cache": globalSettings.args.cache}, extra={"source": "cache", "type": "warning"})
+            marker = open(processingMarker, 'r')
+            position = int(marker.read())
+            marker.close()
+        marker = open(processingMarker, 'w')
         cacheSize = os.path.getsize(cacheFile)
-        with open(cacheFile) as f:
-            for event in f:
-                eventStartTime = time.perf_counter_ns()
-                try:
-                    for next in self.next if self.next else []:
-                        next.processHandler(event.strip(),stack=[self.id])
-                except Exception as e:
-                    if self.nextError and self.nextError in objectCache.objectCache:
-                        globalLogger.logger.log(6,f"Event Exception Running Next Error",{ "name" : self.name, "id" : self.id },extra={ "source" : "input", "type" : "next_error" },exc_info=True)
-                        objectCache.objectCache[self.nextError].processHandler(event.strip(),stack=[self.id])
-                    else:
-                        raise
-                self.updateProcessStats(eventStartTime)
-        for item in postRegister.items:
-            item()
-        os.remove(cacheFile)
-        self.logger.log(7,f"Cache file processed",{ "name" : self.name, "id" : self.id, "cache" : globalSettings.args.cache, "took" : time.perf_counter() - startTime, "size" : cacheSize },extra={ "source" : "cache", "type" : "stats" })
+        try:
+            with open(cacheFile) as f:
+                f.seek(position)
+                while event := f.readline():
+                    eventStartTime = time.perf_counter_ns()
+                    try:
+                        for next in self.next if self.next else []:
+                            next.processHandler(event.strip(),stack=[self.id])
+                    except Exception as e:
+                        if self.nextError and self.nextError in objectCache.objectCache:
+                            globalLogger.logger.log(6,f"Event Exception Running Next Error",{ "name" : self.name, "id" : self.id },extra={ "source" : "input", "type" : "next_error" },exc_info=True)
+                            objectCache.objectCache[self.nextError].processHandler(event.strip(),stack=[self.id])
+                        else:
+                            raise
+                    self.updateProcessStats(eventStartTime)
+                    marker.seek(0)
+                    marker.write(str(f.tell()))
+            for item in postRegister.items:
+                item()
+            os.remove(cacheFile)
+            self.logger.log(7,f"Cache file processed",{ "name" : self.name, "id" : self.id, "cache" : globalSettings.args.cache, "took" : time.perf_counter() - startTime, "size" : cacheSize },extra={ "source" : "cache", "type" : "stats" })
+        finally:
+            if os.path.exists(processingMarker):
+                os.remove(processingMarker)
 
     def event(self,event):
         event = event.strip()
