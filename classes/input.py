@@ -95,8 +95,10 @@ class input(base.base):
                     self.updateProcessStats(eventStartTime)
                     marker.seek(0)
                     marker.write(str(f.tell()))
+                    marker.flush()
             for item in postRegister.items:
                 item()
+            marker.close()
             os.remove(cacheFile)
             self.logger.log(7,f"Cache file processed",{ "name" : self.name, "id" : self.id, "cache" : globalSettings.args.cache, "took" : time.perf_counter() - startTime, "size" : cacheSize },extra={ "source" : "cache", "type" : "stats" })
         finally:

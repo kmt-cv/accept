@@ -14,7 +14,7 @@ def start(pipelines):
     lastRetryCheck = startTime
     queue.process()
     while len([ x for x in pipelines if x.running ]) > 0 or time.time() - startTime < 10:
-        if lastRetryCheck + 600000 < time.time():
+        if lastRetryCheck + 60 < time.time():
             retryBuffer()
             lastRetryCheck = time.time()
         queue.process()
